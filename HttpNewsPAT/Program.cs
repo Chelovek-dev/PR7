@@ -10,7 +10,8 @@ namespace HttpNewsPAT
     {
         static void Main(string[] args)
         {
-            SingIn("user", "user");
+            Cookie token = SingIn("user", "user");
+            GetContent(token);
             /*
             WebRequest request = WebRequest.Create("http://news.permaviat.ru/main");
             using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
@@ -31,9 +32,27 @@ namespace HttpNewsPAT
             */
             Console.Read();
         }
-        public static void SingIn(string login, string password)
+        public static void GetContent(Cookie token)
         {
-            string Uri = "http://news.pernaviat.ru/ajax/login.php";
+            string Url = "http://news.permaviat.ru/main";
+            Debug.WriteLine($"Выполняем запрос: {Url}");
+
+            HttpWebRequest Request = (HttpWebRequest)WebRequest.Create(Url);
+            Request.CookieContainer = new CookieContainer();
+            Request.CookieContainer.Add(token);
+
+            using (HttpWebResponse Response = (HttpWebResponse)Request.GetResponse())
+            {
+                Debug.WriteLine($"Статус выполнения: {Response.StatusCode}");
+
+                string ResponseFromServer = new StreamReader(Response.GetResponseStream()).ReadToEnd();
+                Console.WriteLine(ResponseFromServer);
+            }
+        }
+        public static Cookie SingIn(string login, string password)
+        {
+            Cookie token = null;
+            string Uri = "http://news.permaviat.ru/ajax/login.php";
             Debug.WriteLine($"Выполнен запрос: {Uri}");
 
             HttpWebRequest Request = (HttpWebRequest)WebRequest.Create(Uri);
@@ -53,7 +72,10 @@ namespace HttpNewsPAT
                 Debug.WriteLine($"Статус выполнения: {Response.StatusCode}");
                 string ResponseFromServer = new StreamReader(Response.GetResponseStream()).ReadToEnd();
                 Console.WriteLine(ResponseFromServer);
+
+                token = Response.Cookies["token"];
             }
+            return token;
         }
     }
 }
