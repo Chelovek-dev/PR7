@@ -15,30 +15,78 @@ namespace HttpNewsPAT
 
         static async Task Main(string[] args)
         {
-            Cookie token = await SingIn("user", "user");
+            Console.WriteLine("1. Добавить и парсить permaviat");
+            Console.WriteLine("2. Парсить Lenta.ru");
+            Console.Write("Выберите: ");
+            string select = Console.ReadLine();
 
-            Console.WriteLine("\nДобавление новой записи");
-
-            Console.Write("Заголовок: ");
-            string name = Console.ReadLine();
-
-            Console.Write("Текст: ");
-            string description = Console.ReadLine();
-
-            Console.Write("Ссылка на изображение: ");
-            string src = Console.ReadLine();
-
-            bool success = await AddNews(token, name, src, description);
-
-            if (success)
+            if (select == "1")
             {
-                Console.WriteLine("\nОбновлённый список:");
-                string content = await GetContent(token);
-                ParsingHtml(content);
+                Cookie token = await SingIn("user", "user");
+
+                Console.WriteLine("\nДобавление новой записи");
+
+                Console.Write("Заголовок: ");
+                string name = Console.ReadLine();
+
+                Console.Write("Текст: ");
+                string description = Console.ReadLine();
+
+                Console.Write("Ссылка на изображение: ");
+                string src = Console.ReadLine();
+
+                bool success = await AddNews(token, name, src, description);
+
+                if (success)
+                {
+                    Console.WriteLine("\nОбновлённый список:");
+                    string content = await GetContent(token);
+                    ParsingHtml(content);
+                }
+            }
+            else if (select == "2")
+            {
+                await ParseLenta();
             }
 
             Console.Read();
         }
+
+        public static async Task ParseLenta()
+        {
+            try
+            {
+                string url = "https://lenta.ru/";
+                var response = await _httpClient.GetAsync(url);
+                string html = await response.Content.ReadAsStringAsync();
+
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+
+                var newsItems = doc.DocumentNode.SelectNodes("//a[contains(@class, 'card')]");
+                {
+                    int count = 1;
+                    foreach (var item in newsItems.Take(10))
+                    {
+                        var titleNode = item.SelectSingleNode(".//span[contains(@class, 'card-title')]");
+                        string title = titleNode?.InnerText?.Trim() ?? item.InnerText.Trim();
+
+                        string link = item.GetAttributeValue("href", "");
+                        if (!string.IsNullOrEmpty(link) && !link.StartsWith("http"))
+                            link = "https://lenta.ru" + link;
+
+                        Console.WriteLine($"{count}. {title}");
+                        Console.WriteLine();
+                        count++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка: {ex.Message}");
+            }
+        }
+
         public static void ParsingHtml(string htmlCode)
         {
             var Html = new HtmlDocument();
