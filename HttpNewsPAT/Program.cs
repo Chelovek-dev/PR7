@@ -16,8 +16,26 @@ namespace HttpNewsPAT
         static async Task Main(string[] args)
         {
             Cookie token = await SingIn("user", "user");
-            string Content = await GetContent(token);
-            ParsingHtml(Content);
+
+            Console.WriteLine("\nДобавление новой записи");
+
+            Console.Write("Заголовок: ");
+            string name = Console.ReadLine();
+
+            Console.Write("Текст: ");
+            string description = Console.ReadLine();
+
+            Console.Write("Ссылка на изображение: ");
+            string src = Console.ReadLine();
+
+            bool success = await AddNews(token, name, src, description);
+
+            if (success)
+            {
+                Console.WriteLine("\nОбновлённый список:");
+                string content = await GetContent(token);
+                ParsingHtml(content);
+            }
 
             Console.Read();
         }
@@ -36,6 +54,47 @@ namespace HttpNewsPAT
                 var description = DivNew.ChildNodes[5].InnerHtml;
 
                 Console.WriteLine($"{name} \nИзображение: {src} \nОписание: {description}");
+            }
+        }
+
+        public static async Task<bool> AddNews(Cookie token, string name, string src, string description)
+        {
+            string url = "http://news.permaviat.ru/ajax/add.php";
+
+            try
+            {
+                Debug.WriteLine($"Выполнение запроса: {url}");
+
+                var postData = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("name", name),
+                    new KeyValuePair<string, string>("description", description),
+                    new KeyValuePair<string, string>("src", src),
+                    new KeyValuePair<string, string>("token", token.Value)
+                });
+
+                var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Content = postData;
+                request.Headers.Add("Cookie", $"{token.Name}={token.Value}");
+
+                var response = await _httpClient.SendAsync(request);
+                Debug.WriteLine($"Статус выполнения: {response.StatusCode}");
+
+                string responseText = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Ответ: {responseText}");
+
+                if (response.IsSuccessStatusCode && !responseText.Contains("<html>"))
+                {
+                    Console.WriteLine("Запись добавлена!");
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка: {ex.Message}");
+                return false;
             }
         }
 
