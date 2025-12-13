@@ -1,23 +1,24 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
+using System.Net.Http;
+using System.Threading.Tasks;
 using HtmlAgilityPack;
 
 namespace HttpNewsPAT
 {
     internal class Program
     {
-        static void Main(string[] args)
+        private static readonly HttpClient _httpClient = new HttpClient();
+
+        static async Task Main(string[] args)
         {
-            Cookie token = SingIn("user", "user");
-            string Content = GetContent(token);
+            Cookie token = await SingIn("user", "user");
+            string Content = await GetContent(token);
             ParsingHtml(Content);
-            
+
             Console.Read();
         }
         public static void ParsingHtml(string htmlCode)
@@ -37,51 +38,67 @@ namespace HttpNewsPAT
                 Console.WriteLine($"{name} \nИзображение: {src} \nОписание: {description}");
             }
         }
-        public static string GetContent(Cookie token)
+
+        public static async Task<string> GetContent(Cookie token)
         {
-            string Content = null;
-            string Url = "http://news.permaviat.ru/main";
-            Debug.WriteLine($"Выполняем запрос: {Url}");
+            string url = "http://news.permaviat.ru/main";
+            Debug.WriteLine($"Выполняем запрос: {url}");
 
-            HttpWebRequest Request = (HttpWebRequest)WebRequest.Create(Url);
-            Request.CookieContainer = new CookieContainer();
-            Request.CookieContainer.Add(token);
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
 
-            using (HttpWebResponse Response = (HttpWebResponse)Request.GetResponse())
+            if (token != null)
             {
-                Debug.WriteLine($"Статус выполнения: {Response.StatusCode}");
-
-                Content = new StreamReader(Response.GetResponseStream()).ReadToEnd();
+                request.Headers.Add("Cookie", $"{token.Name}={token.Value}");
             }
-            return Content;
+
+            try
+            {
+                var response = await _httpClient.SendAsync(request);
+                Debug.WriteLine($"Статус выполнения: {response.StatusCode}");
+
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка получения контента: {ex.Message}");
+                return null;
+            }
         }
-        public static Cookie SingIn(string login, string password)
+        public static async Task<Cookie> SingIn(string login, string password)
         {
-            Cookie token = null;
-            string Uri = "http://news.permaviat.ru/ajax/login.php";
-            Debug.WriteLine($"Выполнен запрос: {Uri}");
+            string uri = "http://news.permaviat.ru/ajax/login.php";
+            Debug.WriteLine($"Выполнен запрос: {uri}");
 
-            HttpWebRequest Request = (HttpWebRequest)WebRequest.Create(Uri);
-            Request.Method = "POST";
-            Request.ContentType = "application/x-www-form-urlencoded";
-            Request.CookieContainer = new CookieContainer();
-            byte[] Data = Encoding.ASCII.GetBytes($"login={login}&password={password}");
-            Request.ContentLength = Data.Length;
-
-            using (Stream stream = Request.GetRequestStream())
+            var content = new FormUrlEncodedContent(new[]
             {
-                stream.Write(Data, 0, Data.Length);
+                new KeyValuePair<string, string>("login", login),
+                new KeyValuePair<string, string>("password", password)
+            });
+
+            try
+            {
+                var response = await _httpClient.PostAsync(uri, content);
+                Debug.WriteLine($"Статус выполнения: {response.StatusCode}");
+
+                string responseFromServer = await response.Content.ReadAsStringAsync();
+                Console.WriteLine(responseFromServer);
+
+                if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+                {
+                    var tokenCookie = cookies.FirstOrDefault(c => c.Contains("token="));
+                    if (!string.IsNullOrEmpty(tokenCookie))
+                    {
+                        var cookieValue = tokenCookie.Split('=')[1].Split(';')[0];
+                        return new Cookie("token", cookieValue, "/", "news.permaviat.ru");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка авторизации: {ex.Message}");
             }
 
-            using (HttpWebResponse Response = (HttpWebResponse)Request.GetResponse())
-            {
-                Debug.WriteLine($"Статус выполнения: {Response.StatusCode}");
-                string ResponseFromServer = new StreamReader(Response.GetResponseStream()).ReadToEnd();
-                Console.WriteLine(ResponseFromServer);
-
-                token = Response.Cookies["token"];
-            }
-            return token;
+            return null;
         }
     }
 }
