@@ -15,11 +15,16 @@ namespace HttpNewsPAT
 
         static async Task Main(string[] args)
         {
+            Trace.Listeners.Add(new TextWriterTraceListener("debug.log"));
+            Trace.AutoFlush = true;
+            Trace.WriteLine($"=== Запуск программы: {DateTime.Now} ===");
+
             Console.WriteLine("1. Добавить и парсить permaviat");
             Console.WriteLine("2. Парсить Lenta.ru");
             Console.Write("Выберите: ");
             string select = Console.ReadLine();
 
+            Trace.WriteLine($"Выбран вариант: {select}");
             if (select == "1")
             {
                 Cookie token = await SingIn("user", "user");
@@ -35,6 +40,7 @@ namespace HttpNewsPAT
                 Console.Write("Ссылка на изображение: ");
                 string src = Console.ReadLine();
 
+                Trace.WriteLine($"Введены данные: name={name}, src={src}");
                 bool success = await AddNews(token, name, src, description);
 
                 if (success)
@@ -49,11 +55,14 @@ namespace HttpNewsPAT
                 await ParseLenta();
             }
 
+            Trace.WriteLine($"=== Завершение программы: {DateTime.Now} ===");
+            Trace.Flush();
             Console.Read();
         }
 
         public static async Task ParseLenta()
         {
+            Trace.WriteLine("Начало парсинга Lenta.ru");
             try
             {
                 string url = "https://lenta.ru/";
@@ -75,6 +84,7 @@ namespace HttpNewsPAT
                         if (!string.IsNullOrEmpty(link) && !link.StartsWith("http"))
                             link = "https://lenta.ru" + link;
 
+                        Trace.WriteLine($"Новость {count}: {title}");
                         Console.WriteLine($"{count}. {title}");
                         Console.WriteLine();
                         count++;
@@ -83,12 +93,15 @@ namespace HttpNewsPAT
             }
             catch (Exception ex)
             {
+                Trace.WriteLine($"Ошибка ParseLenta: {ex.Message}");
                 Console.WriteLine($"Ошибка: {ex.Message}");
             }
+            Trace.WriteLine("Конец парсинга Lenta.ru");
         }
 
         public static void ParsingHtml(string htmlCode)
         {
+            Trace.WriteLine("Начало ParsingHtml");
             var Html = new HtmlDocument();
             Html.LoadHtml(htmlCode);
 
@@ -101,8 +114,10 @@ namespace HttpNewsPAT
                 var name = DivNew.ChildNodes[3].InnerHtml;
                 var description = DivNew.ChildNodes[5].InnerHtml;
 
+                Trace.WriteLine($"Парсинг: name={name}, src={src}");
                 Console.WriteLine($"{name} \nИзображение: {src} \nОписание: {description}");
             }
+            Trace.WriteLine("Конец ParsingHtml");
         }
 
         public static async Task<bool> AddNews(Cookie token, string name, string src, string description)
@@ -111,8 +126,7 @@ namespace HttpNewsPAT
 
             try
             {
-                Debug.WriteLine($"Выполнение запроса: {url}");
-
+                Trace.WriteLine($"AddNews запрос: {url}");
                 var postData = new FormUrlEncodedContent(new[]
                 {
                     new KeyValuePair<string, string>("name", name),
@@ -126,13 +140,15 @@ namespace HttpNewsPAT
                 request.Headers.Add("Cookie", $"{token.Name}={token.Value}");
 
                 var response = await _httpClient.SendAsync(request);
-                Debug.WriteLine($"Статус выполнения: {response.StatusCode}");
+                Trace.WriteLine($"AddNews статус: {response.StatusCode}");
 
                 string responseText = await response.Content.ReadAsStringAsync();
+                Trace.WriteLine($"AddNews ответ: {responseText}");
                 Console.WriteLine($"Ответ: {responseText}");
 
                 if (response.IsSuccessStatusCode && !responseText.Contains("<html>"))
                 {
+                    Trace.WriteLine("Запись успешно добавлена");
                     Console.WriteLine("Запись добавлена!");
                     return true;
                 }
@@ -141,6 +157,7 @@ namespace HttpNewsPAT
             }
             catch (Exception ex)
             {
+                Trace.WriteLine($"Ошибка AddNews: {ex.Message}");
                 Console.WriteLine($"Ошибка: {ex.Message}");
                 return false;
             }
@@ -149,7 +166,7 @@ namespace HttpNewsPAT
         public static async Task<string> GetContent(Cookie token)
         {
             string url = "http://news.permaviat.ru/main";
-            Debug.WriteLine($"Выполняем запрос: {url}");
+            Trace.WriteLine($"GetContent запрос: {url}");
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
 
@@ -161,12 +178,13 @@ namespace HttpNewsPAT
             try
             {
                 var response = await _httpClient.SendAsync(request);
-                Debug.WriteLine($"Статус выполнения: {response.StatusCode}");
+                Trace.WriteLine($"GetContent статус: {response.StatusCode}");
 
                 return await response.Content.ReadAsStringAsync();
             }
             catch (Exception ex)
             {
+                Trace.WriteLine($"Ошибка GetContent: {ex.Message}");
                 Console.WriteLine($"Ошибка получения контента: {ex.Message}");
                 return null;
             }
@@ -174,7 +192,7 @@ namespace HttpNewsPAT
         public static async Task<Cookie> SingIn(string login, string password)
         {
             string uri = "http://news.permaviat.ru/ajax/login.php";
-            Debug.WriteLine($"Выполнен запрос: {uri}");
+            Trace.WriteLine($"SingIn запрос: {uri}");
 
             var content = new FormUrlEncodedContent(new[]
             {
@@ -185,9 +203,10 @@ namespace HttpNewsPAT
             try
             {
                 var response = await _httpClient.PostAsync(uri, content);
-                Debug.WriteLine($"Статус выполнения: {response.StatusCode}");
+                Trace.WriteLine($"SingIn статус: {response.StatusCode}");
 
                 string responseFromServer = await response.Content.ReadAsStringAsync();
+                Trace.WriteLine($"SingIn ответ: {responseFromServer}");
                 Console.WriteLine(responseFromServer);
 
                 if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
@@ -196,12 +215,15 @@ namespace HttpNewsPAT
                     if (!string.IsNullOrEmpty(tokenCookie))
                     {
                         var cookieValue = tokenCookie.Split('=')[1].Split(';')[0];
+                        Trace.WriteLine($"Токен получен: {cookieValue}");
                         return new Cookie("token", cookieValue, "/", "news.permaviat.ru");
                     }
                 }
+                Trace.WriteLine("Токен не найден");
             }
             catch (Exception ex)
             {
+                Trace.WriteLine($"Ошибка SingIn: {ex.Message}");
                 Console.WriteLine($"Ошибка авторизации: {ex.Message}");
             }
 
