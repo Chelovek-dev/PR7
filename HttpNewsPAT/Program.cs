@@ -20,7 +20,7 @@ namespace HttpNewsPAT
             Trace.WriteLine($"=== Запуск программы: {DateTime.Now} ===");
 
             Console.WriteLine("1. Добавить и парсить permaviat");
-            Console.WriteLine("2. Парсить Lenta.ru");
+            Console.WriteLine("2. Парсить Old Boy Barbershop");
             Console.Write("Выберите: ");
             string select = Console.ReadLine();
 
@@ -52,7 +52,7 @@ namespace HttpNewsPAT
             }
             else if (select == "2")
             {
-                await ParseLenta();
+                await ParseOldBoyBarbershop();
             }
 
             Trace.WriteLine($"=== Завершение программы: {DateTime.Now} ===");
@@ -60,45 +60,66 @@ namespace HttpNewsPAT
             Console.Read();
         }
 
-        public static async Task ParseLenta()
+        public static async Task ParseOldBoyBarbershop()
         {
-            Trace.WriteLine("Начало парсинга Lenta.ru");
+            Trace.WriteLine("Начало парсинга OldBoyBarbershop");
+
             try
             {
-                string url = "https://lenta.ru/";
+                string url = "https://oldboybarbershop.com/services";
+
                 var response = await _httpClient.GetAsync(url);
                 string html = await response.Content.ReadAsStringAsync();
 
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
 
-                var newsItems = doc.DocumentNode.SelectNodes("//a[contains(@class, 'card')]");
+                var services = doc.DocumentNode.SelectNodes("//div[contains(@class, 'service')] | //article | //div[contains(@class, 'card')]");
+
+                if (services == null)
                 {
+                    services = doc.DocumentNode.SelectNodes("//div[@data-service] | //section//div");
+                }
+
+                if (services != null && services.Count > 0)
+                {
+                    Console.WriteLine("Услуги Old Boy Barbershop:");
+                    Console.WriteLine("==========================");
+
                     int count = 1;
-                    foreach (var item in newsItems.Take(10))
+                    foreach (var service in services.Take(6))
                     {
-                        var titleNode = item.SelectSingleNode(".//span[contains(@class, 'card-title')]");
-                        string title = titleNode?.InnerText?.Trim() ?? item.InnerText.Trim();
+                        string fullText = service.InnerText.Trim();
 
-                        string link = item.GetAttributeValue("href", "");
-                        if (!string.IsNullOrEmpty(link) && !link.StartsWith("http"))
-                            link = "https://lenta.ru" + link;
+                        var lines = fullText.Split('\n')
+                            .Select(line => line.Trim())
+                            .Where(line => !string.IsNullOrEmpty(line))
+                            .Where(line => line.Length > 2)
+                            .ToArray();
 
-                        Trace.WriteLine($"Новость {count}: {title}");
-                        Console.WriteLine($"{count}. {title}");
-                        Console.WriteLine();
-                        count++;
+                        if (lines.Length > 0)
+                        {
+                            string title = lines[0];
+                            string description = lines.Length > 1 ? lines[1] : "";
+
+                            Console.WriteLine($"{count}. {title}");
+                            if (!string.IsNullOrEmpty(description))
+                            {
+                                Console.WriteLine($"   {description}");
+                            }
+                            Console.WriteLine();
+                            count++;
+                        }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Trace.WriteLine($"Ошибка ParseLenta: {ex.Message}");
                 Console.WriteLine($"Ошибка: {ex.Message}");
             }
-            Trace.WriteLine("Конец парсинга Lenta.ru");
-        }
 
+            Trace.WriteLine("Конец парсинга OldBoyBarbershop");
+        }
         public static void ParsingHtml(string htmlCode)
         {
             Trace.WriteLine("Начало ParsingHtml");
@@ -122,7 +143,7 @@ namespace HttpNewsPAT
 
         public static async Task<bool> AddNews(Cookie token, string name, string src, string description)
         {
-            string url = "http://news.permaviat.ru/ajax/add.php";
+            string url = "http://10.111.20.114/ajax/add.php";
 
             try
             {
@@ -165,7 +186,7 @@ namespace HttpNewsPAT
 
         public static async Task<string> GetContent(Cookie token)
         {
-            string url = "http://news.permaviat.ru/main";
+            string url = "http://10.111.20.114/main";
             Trace.WriteLine($"GetContent запрос: {url}");
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -191,7 +212,7 @@ namespace HttpNewsPAT
         }
         public static async Task<Cookie> SingIn(string login, string password)
         {
-            string uri = "http://news.permaviat.ru/ajax/login.php";
+            string uri = "http://10.111.20.114/ajax/login.php";
             Trace.WriteLine($"SingIn запрос: {uri}");
 
             var content = new FormUrlEncodedContent(new[]
@@ -216,7 +237,7 @@ namespace HttpNewsPAT
                     {
                         var cookieValue = tokenCookie.Split('=')[1].Split(';')[0];
                         Trace.WriteLine($"Токен получен: {cookieValue}");
-                        return new Cookie("token", cookieValue, "/", "news.permaviat.ru");
+                        return new Cookie("token", cookieValue, "/", "10.111.20.114");
                     }
                 }
                 Trace.WriteLine("Токен не найден");
